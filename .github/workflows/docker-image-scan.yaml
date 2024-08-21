@@ -1,0 +1,47 @@
+name: Prisma Cloud Docker Image Scan
+on:
+  pull_request:
+    branches:
+      - 'main'
+
+jobs:
+  Docker-Image-Scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Login to Docker Registry
+      - name: Docker login
+        uses: docker/login-action@v2
+        with:
+          username: ultimatetestdrive
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build Docker image
+      - name: Docker Build
+        uses: docker/build-push-action@v4
+        with:
+          push: false
+          tags: ultimatetestdrive/ubuntu:${{ github.run_number }}
+
+      # Runs Docker image scan
+      - name: Docker Image Scan
+        id: scan
+        uses: PaloAltoNetworks/prisma-cloud-scan@v1
+        with:
+          pcc_console_url: ${{ secrets.PCC_CONSOLE_URL }}
+          pcc_user: ${{ secrets.PCC_ACCESS_KEY_ID }}
+          pcc_pass: ${{ secrets.PCC_SECRET_ACCESS_KEY }}
+          image_name: ultimatetestdrive/ubuntu:${{ github.run_number }}
+
+      # Runs twistcli sandbox
+      - name: Docker Image Sandbox Scan
+        run: |
+          curl -s https://utd-packages.s3.amazonaws.com/twistcli --output twistcli
+          chmod +x twistcli
+          sudo ./twistcli sandbox --address ${{ secrets.PCC_CONSOLE_URL }} --user ${{ secrets.PCC_ACCESS_KEY_ID }} --password ${{ secrets.PCC_SECRET_ACCESS_KEY }} --analysis-duration 2m ultimatetestdrive/ubuntu:${{ github.run_number }}
+
+      # Push Image to registry if all the steps pass
+      - name: Docker Push
+        run: |
+          docker push ultimatetestdrive/ubuntu:${{ github.run_number }}
